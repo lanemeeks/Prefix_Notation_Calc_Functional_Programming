@@ -1,25 +1,8 @@
 #lang racket
-(define prompt?;interactive/batch code provided
-   (let [(args (current-command-line-arguments))]
-     (cond
-       [(= (vector-length args) 0) #t]
-       [(string=? (vector-ref args 0) "-b") #f]
-       [(string=? (vector-ref args 0) "--batch") #f]
-       [else #t])))
-
 ;tail-recursive helper function that given the prefix expression
 ;as a string it returns the result as a number
 (define (eval-exp expression-str history)
-  (define expression
-    (with-handlers ([exn:fail?
-                     (lambda (e)
-                       (error "Error: Invalid format"))])
-      (with-input-from-string expression-str
-        (lambda ()
-          (let ((expr (read)))
-            (unless (eof-object? (read))
-              (error "Error: Invalid format"))
-            expr)))));parsing string like input makes into data and this block catches cases with bad parenthesis
+  (define expression (with-input-from-string expression-str read));parsing string like input makes into data
 
 
   ;defining another helper method to interpret use of $n
@@ -72,7 +55,7 @@
                    (cons (car remaining) stack)));call eval-loop again
        (else;token is operator case
         (if (< (length stack) 2)
-            (error "Error: too few operands/invalid format")
+            (error "Error: too few operands")
             (let* ((op (car remaining))
                (a (car stack))
                (b (cadr stack));get things from the stack
@@ -83,34 +66,31 @@
 
 (define (user-input)
   (let input-loop ((history '()))
-    (when prompt?
-      (display "Enter prefix expression or \"quit\" to exit: ")
-      (flush-output));makes sure the prompt is displayed
+    (display "Enter prefix expression or \"quit\" to exit: ")
+    (flush-output);makes sure the prompt is displayed
 
     (define input (read-line))
     
     (cond
       ((or (eof-object? input)
            (string=? input "quit"));user wants to quit the program
-       (when prompt?
-         (displayln "Ending Program")))
+       (displayln "Ending Program"))
       ((or (string=? input "")
-          (regexp-match? #px"^\\s*$" input));checking if input is empty or just white spaces, regex expression googled
+          (regexp-match? #px"^\\s*$" input));checking if input is empty or just white spaces
        (error "Error: Input is empty")
        (input-loop history))
       (else
+       (with-handlers
+           ((exn:fail?;try-catch statement checking for run time errors
+             (lambda (e)
+               (error "Error: runtime or syntax error caught by program")
+               (input-loop history))))
          (let* ((result (eval-exp input history))
                 (new-history (cons result history));adding the result to the history list
                 (id (length new-history))
                 (float-val (real->double-flonum result)))
-           (if prompt?
-               (begin
-                 (display id)
-                 (display ": ")
-                 (display float-val)
-                 (newline))
-               (begin
-                 (display float-val)
-                 (newline)))
-           (input-loop new-history))))))
-(user-input);adding this runs program without user prompting for it
+           (display id)
+           (display ": ")
+           (display float-val)
+           (newline)
+           (input-loop new-history)))))))
